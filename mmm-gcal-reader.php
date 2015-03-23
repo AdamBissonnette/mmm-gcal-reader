@@ -17,9 +17,9 @@ function LoadGCalReader($atts, $content=null)
         'src' => '',
         'class' => '',
         'count' => '5',
-        'date_format' => 'd M Y g:ia'
+        'date_format' => 'd M Y g:ia',
+        'sortorder' => "ascend"
         ), $atts ) );
-    
     $output = "";
 
     if ($class != '')
@@ -29,29 +29,40 @@ function LoadGCalReader($atts, $content=null)
 
     $entry_template = "<p" . $class . ">%s</p>";
 
-    $api = new clApi($src);
-    if ($feed = $api->parse()) {
+    $clFeed = new clApi($src);
+    $curdate = (new DateTime())->format("Y-m-d");
+
+    $clFeed->param("orderby", "starttime");
+    $clFeed->param("sortorder", $sortorder);
+    $clFeed->param("start-min", $curdate);
+
+// var_dump($clFeed);
+
+    if ($feed = $clFeed->parse()) {
       // now we have data...
         $output = "";
 
         $i = 0;
+
         foreach ($feed->get('entry') as $entry) {
-            if ($content == null)
+            if (strpos($entry->summary, "When") !== false)
             {
-                $cur_entry = ($entry->title) . "<br />";
-                $cur_entry_date = _getEntryStartDate($entry->summary);
-                $cur_entry .= $cur_entry_date->format($date_format);
-                $output .= sprintf($entry_template, $cur_entry);
-            }
-            else
-            {
+                if ($content == null)
+                {
+                    $cur_entry = ($entry->title) . "<br />";
+                    $cur_entry_date = _getEntryStartDate($entry->summary);
+                    $cur_entry .= $cur_entry_date->format($date_format);
+                    $output .= sprintf($entry_template, $cur_entry);
+                }
+                else
+                {
+                    $output .= _doGCalTemplate($content, $entry, $date_format);
+                }
 
-                $output .= _doGCalTemplate($content, $entry, $date_format);
-            }
-
-            if (++$i == $count)
-            {
-                break;
+                if (++$i == $count)
+                {
+                    break;
+                }
             }
         }
     } else {
@@ -64,7 +75,9 @@ function LoadGCalReader($atts, $content=null)
 
 function _getEntryStartDate($entrySummary)
 {
-    return new DateTime(trim(preg_replace("/<br>Event Status: confirmed|When: |to .+?\n.+?\n+\s?/", "", $entrySummary)));
+    $replace_regex = "/Who.+?\n|<br>|Event Status: confirmed|When: |to .+?\n.+?\n+/";
+
+    return new DateTime(trim(preg_replace($replace_regex, "", $entrySummary)));
 }
 
 function _doGCalTemplate($content, $entry, $dateFormat)
