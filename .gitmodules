@@ -1,0 +1,3 @@
+[submodule "lib/coreylib"]
+	path = lib/coreylib
+	url = https://github.com/collegeman/coreylib
