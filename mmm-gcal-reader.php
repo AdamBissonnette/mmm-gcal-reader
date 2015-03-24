@@ -10,106 +10,120 @@ Author URI: http://www.mediamanifesto.com
 
 include_once('lib/coreylib/coreylib.php');
 
-function LoadGCalReader($atts, $content=null)
+class MM_GCal_Reader
 {
+    public static $attsKeyTemplate = "{%s}";
 
-    extract( shortcode_atts( array(
-        'src' => '',
-        'class' => '',
-        'count' => '5',
-        'date_format' => 'd M Y g:ia',
-        'sortorder' => "ascend"
-        ), $atts ) );
-    $output = "";
-
-    if ($class != '')
+    function MM_GCal_Reader()
     {
-        $class = sprintf(' class="%s"', $class);
+        add_shortcode( 'MMGCalReader', array(&$this, 'LoadGCalReader') );
     }
 
-    $entry_template = "<p" . $class . ">%s</p>";
+    function LoadGCalReader($atts, $content=null)
+    {
 
-    $clFeed = new clApi($src);
-    $curdate = (new DateTime())->format("Y-m-d");
-
-    $clFeed->param("orderby", "starttime");
-    $clFeed->param("sortorder", $sortorder);
-    $clFeed->param("start-min", $curdate);
-
-// var_dump($clFeed);
-
-    if ($feed = $clFeed->parse()) {
-      // now we have data...
+        extract( shortcode_atts( array(
+            'src' => '',
+            'class' => '',
+            'count' => '5',
+            'date_format' => 'd M Y g:ia',
+            'sortorder' => "ascend",
+            'orderby' => "starttime",
+            'start' => (new DateTime())->format("Y-m-d")
+            ), $atts ) );
         $output = "";
 
-        $i = 0;
+        if ($class != '')
+        {
+            $class = sprintf(' class="%s"', $class);
+        }
 
-        foreach ($feed->get('entry') as $entry) {
-            if (strpos($entry->summary, "When") !== false)
-            {
-                if ($content == null)
-                {
-                    $cur_entry = ($entry->title) . "<br />";
-                    $cur_entry_date = _getEntryStartDate($entry->summary);
-                    $cur_entry .= $cur_entry_date->format($date_format);
-                    $output .= sprintf($entry_template, $cur_entry);
-                }
-                else
-                {
-                    $output .= _doGCalTemplate($content, $entry, $date_format);
-                }
+        $entry_template = "<p" . $class . ">%s</p>";
 
-                if (++$i == $count)
+        $clFeed = new clApi($src);
+
+        $clFeed->param("orderby", $orderby);
+        $clFeed->param("sortorder", $sortorder);
+        $clFeed->param("start-min", $start);
+
+        if ($feed = $clFeed->parse()) {
+          // now we have data...
+            $output = "";
+
+            $i = 0;
+
+            foreach ($feed->get('entry') as $entry) {
+                if (strpos($entry->summary, "When") !== false)
                 {
-                    break;
+                    if ($content == null)
+                    {
+                        $cur_entry = ($entry->title) . "<br />";
+                        $cur_entry_date = $this->_getEntryStartDate($entry->summary);
+                        $cur_entry .= $cur_entry_date->format($date_format);
+                        $output .= sprintf($entry_template, $cur_entry);
+                    }
+                    else
+                    {
+                        $output .= $this->_doGCalTemplate($content, $entry, $date_format);
+                    }
+
+                    if (++$i == $count)
+                    {
+                        break;
+                    }
                 }
             }
+        } else {
+          // something went wrong
+            $output = "Couldn't parse the given xml.";
         }
-    } else {
-      // something went wrong
-        $output = "Couldn't parse the given xml.";
+
+        return $output;
     }
 
-    return $output;
-}
+    function _getEntryStartDate($entrySummary)
+    {
+        $replace_regex = "/Who.+?\n|<br>|Event Status: confirmed|When: |to .+?\n.+?\n+/";
 
-function _getEntryStartDate($entrySummary)
-{
-    $replace_regex = "/Who.+?\n|<br>|Event Status: confirmed|When: |to .+?\n.+?\n+/";
-
-    return new DateTime(trim(preg_replace($replace_regex, "", $entrySummary)));
-}
-
-function _doGCalTemplate($content, $entry, $dateFormat)
-{
-    $entryDate = _getEntryStartDate($entry->summary);
-
-    $entryAtts = array( "title" => $entry->title,
-                        "date" => $entryDate->format($dateFormat),
-                        "D" => $entryDate->format("D"),
-                        "d" => $entryDate->format("d"),
-                        "M" => $entryDate->format("M"),
-                        "Y" => $entryDate->format("Y"),
-                        "time" => $entryDate->format("g:ia"));
-
-    return _AddEntryAttsToTemplate($content, $entryAtts);
-}
-
-function _AddEntryAttsToTemplate($template, $entryAtts)
-{
-    $output = $template;
-
-    foreach ($entryAtts as $key => $value) {
-
-        if (isset($value))
-        {
-            $output = str_replace(sprintf('{%s}', $key), $value, $output);
-        }
+        return new DateTime(trim(preg_replace($replace_regex, "", $entrySummary)));
     }
 
-    return $output;
+    function _doGCalTemplate($content, $entry, $dateFormat)
+    {
+        $entryDate = $this->_getEntryStartDate($entry->summary);
+
+        $entryAtts = array( "title" => $entry->title,
+                            "date" => $entryDate->format($dateFormat),
+                            "D" => $entryDate->format("D"),
+                            "d" => $entryDate->format("d"),
+                            "M" => $entryDate->format("M"),
+                            "Y" => $entryDate->format("Y"),
+                            "time" => $entryDate->format("g:ia"));
+
+        return $this->_AddEntryAttsToTemplate($content, $entryAtts);
+    }
+
+    function _AddEntryAttsToTemplate($template, $entryAtts)
+    {
+        $output = $template;
+
+        foreach ($entryAtts as $key => $value) {
+
+            if (isset($value))
+            {
+                $output = str_replace(sprintf(MM_GCal_Reader::$attsKeyTemplate, $key), $value, $output);
+            }
+        }
+
+        return $output;
+    }
 }
 
-add_shortcode( 'MmmGCalReader', 'LoadGCalReader' );
+add_action( 'init', 'MM_GCal_Reader_Init', 5 );
+function MM_GCal_Reader_Init()
+{
+    global $MM_GCal_Reader;
+    $MM_GCal_Reader = new MM_GCal_Reader();
+}
 
 ?>
